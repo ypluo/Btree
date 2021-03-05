@@ -1,4 +1,4 @@
-/*  slotonly.h - btree of unordered tree node, along with a indirect vector
+/*  slotonly.h - btree of unordered tree node, but add a indirect array
     Copyright(c) 2020 Luo Yongping. All rights reserved.
 */
 

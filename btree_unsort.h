@@ -30,11 +30,27 @@ struct Record {
 class Node {
     public:
         char * leftmost_ptr;
+        char * sibling_ptr;
         uint64_t count;
-        uint64_t bitmap;
-        char hdr[8]; // the total meta data is 32 bytes
+        uint64_t bitmap; // the total meta data is 32 bytes
         Record recs[NODE_SIZE];
+    private:
+        void insert(_key_t k, _value_t v) {
+            uint64_t mask = 0x8000000000000000;
+            int8_t slot;
+            for(int i = 0; i < NODE_SIZE; i++) {
+                if((bitmap & mask) == 0) {
+                    slot = i;
+                    break;
+                }
+                mask >>= 1;
+            }
     
+            recs[slot] = {k, (char *)v};
+
+            count += 1;
+            bitmap |= mask;
+        }
     public:
         Node (): leftmost_ptr(NULL), count(0), bitmap(0) {}
         
@@ -43,8 +59,10 @@ class Node {
                 void *ret = _aligned_malloc(size, 64); 
             #else
                 void * ret;
-                if(posix_memalign(&ret,64,size) != 0)
+                if(posix_memalign(&ret,64,size) != 0) {
                     exit(-1);
+                }
+                return ret; 
             #endif
         }
 
@@ -106,23 +124,6 @@ class Node {
             }
         }
 
-        void insert(_key_t k, _value_t v) {
-            uint64_t mask = 0x8000000000000000;
-            int8_t slot;
-            for(int i = 0; i < NODE_SIZE; i++) {
-                if((bitmap & mask) == 0) {
-                    slot = i;
-                    break;
-                }
-                mask >>= 1;
-            }
-    
-            recs[slot] = {k, (char *)v};
-
-            count += 1;
-            bitmap |= mask;
-        }
-
         bool store(_key_t k, _value_t v, _key_t & split_k, Node * & split_node) {
             if(count == NODE_SIZE) {
                 split_node = new Node;
@@ -154,8 +155,12 @@ class Node {
 
                 split_node->count = j;
                 split_node->bitmap = UINT64_MAX << (64 - j);
-                
-                count -= j + (leftmost_ptr == NULL ? 0 : 1);                
+            
+                count -= j + (leftmost_ptr == NULL ? 0 : 1);        
+
+                // update sibling pointer
+                split_node->sibling_ptr = sibling_ptr;
+                sibling_ptr = (char *) split_node;        
 
                 if(split_k > k) {
                     insert(k, v);
